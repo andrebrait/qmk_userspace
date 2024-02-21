@@ -94,7 +94,6 @@ uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         XXXXXXX, XXXXXXX,  CMDQ_TOG,                           XXXXXXX,                            XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX
     )
 };
-// clang-format on
 
 #ifdef ENCODER_MAP_ENABLE
 const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][2] = {
@@ -104,6 +103,7 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][2] = {
     [MAC_FN]   = {ENCODER_CCW_CW(XXXXXXX, XXXXXXX)},
 };
 #endif
+// clang-format on
 
 /* To record user preferences */
 typedef union {
@@ -161,8 +161,7 @@ static void         cancel_delayed_press(void);
 #        error "FLASHING_EFFECT_INTERVAL must be a positive integer smaller than UINT16_MAX / 2"
 #    endif
 
-static void set_rgb_layer_winfn(void);
-static void set_rgb_layer_macfn(void);
+static void set_rgb_layer(int *arr, int size, uint8_t r, uint8_t g, uint8_t b);
 
 /* Effects functions */
 static float flashing_effect(fast_timer_t delta_time);
@@ -305,12 +304,13 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 #ifdef OS_DETECTION_ENABLE
 
 /* Marks that the os detection code was already executed */
-static bool os_detection_pending = true;
+static volatile bool os_detection_pending = true;
 
 /*
 Automatically switch layers when changing OSes
 */
 bool process_detected_host_os_user(os_variant_t os) {
+    // Determine layer to move to
     uint8_t new_layer;
     switch (os) {
         case OS_LINUX:
@@ -435,6 +435,28 @@ static float increasing_effect(fast_timer_t delta_time) {
     return ((float)delta_time) / effect_max_duration;
 }
 
+// RGB led number layout, function of the key
+
+//  67, led 01   0, ESC    6, F1      12, F2      18, F3   23, F4   28, F5      34, F6   39, F7   44, F8      50, F9   56, F10   61, F11    66, F12    69, Prt       Rotary(Mute)   68, led 12
+//  70, led 02   1, ~      7, 1       13, 2       19, 3    24, 4    29, 5       35, 6    40, 7    45, 8       51, 9    57, 0     62, -_     78, (=+)   85, BackSpc   72, Home       71, led 13
+//  73, led 03   2, Tab    8, Q       14, W       20. E    25, R    30, T       36, Y    41, U    46, I       52, O    58, P     63, [{     89, ]}     93, \|        75, PgUp       74, led 14
+//  76, led 04   3, Caps   9, A       15, S       21, D    26, F    31, G       37, H    42, J    47, K       53, L    59, ;:    64, '"                96, Enter     86, PgDn       77, led 15
+//  80, led 05   4, Sh_L   10, Z      16, X       22, C    27, V    32, B       38, N    43, M    48, ,<      54, .<   60, /?               90, Sh_R   94, Up        82, End        81, led 16
+//  83, led 06   5, Ct_L   11,Win_L   17, Alt_L                     33, SPACE                     49, Alt_R   55, FN             65, Ct_R   95, Left   97, Down      79, Right      84, led 17
+//  87, led 07                                                                                                                                                                      88, led 18
+//  91, led 08                                                                                                                                                                      92, led 19
+
+static int WIN_FN_LEDS[] = {0, 2, 3, 6, 8, 9, 12, 14, 15, 18, 20, 21, 23, 25, 26, 28, 34, 38, 39, 44, 50, 56, 61, 66, 72, 75, 82, 86, 93};
+static int MAC_FN_LEDS[] = {0, 2, 3, 6, 8, 9, 12, 14, 15, 17, 18, 20, 21, 23, 25, 26, 28, 34, 38, 39, 44, 50, 56, 61, 66, 72, 75, 82, 86, 93};
+
+static void set_rgb_layer(int *arr, int size, uint8_t r, uint8_t g, uint8_t b) {
+    for (int i = 0; i < size; i++) {
+        rgb_matrix_set_color(arr[i], r, g, b);
+    }
+}
+
+#    define SET_RGB_LAYER(arr, color) (set_rgb_layer(arr, ARRAY_SIZE(arr), color))
+
 bool rgb_matrix_indicators_user(void) {
     if (effect_started_time > 0) {
         fast_timer_t delta_time = timer_elapsed_fast(effect_started_time);
@@ -461,10 +483,10 @@ bool rgb_matrix_indicators_user(void) {
         case MAC_BASE:
             break;
         case WIN_FN:
-            set_rgb_layer_winfn();
+            SET_RGB_LAYER(WIN_FN_LEDS, WIN_FN_COLOR);
             return false;
         case MAC_FN:
-            set_rgb_layer_macfn();
+            SET_RGB_LAYER(MAC_FN_LEDS, MAC_FN_COLOR);
             return false;
         default:
             // This should never happen, but if it does, let's display something!
@@ -472,82 +494,6 @@ bool rgb_matrix_indicators_user(void) {
             return false;
     }
     return true;
-}
-
-// RGB led number layout, function of the key
-
-//  67, led 01   0, ESC    6, F1      12, F2      18, F3   23, F4   28, F5      34, F6   39, F7   44, F8      50, F9   56, F10   61, F11    66, F12    69, Prt       Rotary(Mute)   68, led 12
-//  70, led 02   1, ~      7, 1       13, 2       19, 3    24, 4    29, 5       35, 6    40, 7    45, 8       51, 9    57, 0     62, -_     78, (=+)   85, BackSpc   72, Home       71, led 13
-//  73, led 03   2, Tab    8, Q       14, W       20. E    25, R    30, T       36, Y    41, U    46, I       52, O    58, P     63, [{     89, ]}     93, \|        75, PgUp       74, led 14
-//  76, led 04   3, Caps   9, A       15, S       21, D    26, F    31, G       37, H    42, J    47, K       53, L    59, ;:    64, '"                96, Enter     86, PgDn       77, led 15
-//  80, led 05   4, Sh_L   10, Z      16, X       22, C    27, V    32, B       38, N    43, M    48, ,<      54, .<   60, /?               90, Sh_R   94, Up        82, End        81, led 16
-//  83, led 06   5, Ct_L   11,Win_L   17, Alt_L                     33, SPACE                     49, Alt_R   55, FN             65, Ct_R   95, Left   97, Down      79, Right      84, led 17
-//  87, led 07                                                                                                                                                                      88, led 18
-//  91, led 08                                                                                                                                                                      92, led 19
-
-static void set_rgb_layer_winfn(void) {
-    rgb_matrix_set_color(0, WIN_FN_COLOR);
-    rgb_matrix_set_color(6, WIN_FN_COLOR);
-    rgb_matrix_set_color(12, WIN_FN_COLOR);
-    rgb_matrix_set_color(18, WIN_FN_COLOR);
-    rgb_matrix_set_color(23, WIN_FN_COLOR);
-    rgb_matrix_set_color(28, WIN_FN_COLOR);
-    rgb_matrix_set_color(34, WIN_FN_COLOR);
-    rgb_matrix_set_color(39, WIN_FN_COLOR);
-    rgb_matrix_set_color(44, WIN_FN_COLOR);
-    rgb_matrix_set_color(50, WIN_FN_COLOR);
-    rgb_matrix_set_color(56, WIN_FN_COLOR);
-    rgb_matrix_set_color(61, WIN_FN_COLOR);
-    rgb_matrix_set_color(66, WIN_FN_COLOR);
-    rgb_matrix_set_color(2, WIN_FN_COLOR);
-    rgb_matrix_set_color(3, WIN_FN_COLOR);
-    rgb_matrix_set_color(8, WIN_FN_COLOR);
-    rgb_matrix_set_color(9, WIN_FN_COLOR);
-    rgb_matrix_set_color(14, WIN_FN_COLOR);
-    rgb_matrix_set_color(15, WIN_FN_COLOR);
-    rgb_matrix_set_color(20, WIN_FN_COLOR);
-    rgb_matrix_set_color(21, WIN_FN_COLOR);
-    rgb_matrix_set_color(25, WIN_FN_COLOR);
-    rgb_matrix_set_color(26, WIN_FN_COLOR);
-    rgb_matrix_set_color(38, WIN_FN_COLOR);
-    rgb_matrix_set_color(93, WIN_FN_COLOR);
-    rgb_matrix_set_color(72, WIN_FN_COLOR);
-    rgb_matrix_set_color(75, WIN_FN_COLOR);
-    rgb_matrix_set_color(86, WIN_FN_COLOR);
-    rgb_matrix_set_color(82, WIN_FN_COLOR);
-}
-
-static void set_rgb_layer_macfn(void) {
-    rgb_matrix_set_color(0, MAC_FN_COLOR);
-    rgb_matrix_set_color(6, MAC_FN_COLOR);
-    rgb_matrix_set_color(12, MAC_FN_COLOR);
-    rgb_matrix_set_color(18, MAC_FN_COLOR);
-    rgb_matrix_set_color(23, MAC_FN_COLOR);
-    rgb_matrix_set_color(28, MAC_FN_COLOR);
-    rgb_matrix_set_color(34, MAC_FN_COLOR);
-    rgb_matrix_set_color(39, MAC_FN_COLOR);
-    rgb_matrix_set_color(44, MAC_FN_COLOR);
-    rgb_matrix_set_color(50, MAC_FN_COLOR);
-    rgb_matrix_set_color(56, MAC_FN_COLOR);
-    rgb_matrix_set_color(61, MAC_FN_COLOR);
-    rgb_matrix_set_color(66, MAC_FN_COLOR);
-    rgb_matrix_set_color(2, MAC_FN_COLOR);
-    rgb_matrix_set_color(3, MAC_FN_COLOR);
-    rgb_matrix_set_color(8, MAC_FN_COLOR);
-    rgb_matrix_set_color(9, MAC_FN_COLOR);
-    rgb_matrix_set_color(14, MAC_FN_COLOR);
-    rgb_matrix_set_color(15, MAC_FN_COLOR);
-    rgb_matrix_set_color(20, MAC_FN_COLOR);
-    rgb_matrix_set_color(21, MAC_FN_COLOR);
-    rgb_matrix_set_color(25, MAC_FN_COLOR);
-    rgb_matrix_set_color(26, MAC_FN_COLOR);
-    rgb_matrix_set_color(38, MAC_FN_COLOR);
-    rgb_matrix_set_color(93, MAC_FN_COLOR);
-    rgb_matrix_set_color(72, MAC_FN_COLOR);
-    rgb_matrix_set_color(75, MAC_FN_COLOR);
-    rgb_matrix_set_color(86, MAC_FN_COLOR);
-    rgb_matrix_set_color(82, MAC_FN_COLOR);
-    rgb_matrix_set_color(17, MAC_FN_COLOR);
 }
 
 #endif // RGB_MATRIX_ENABLE
