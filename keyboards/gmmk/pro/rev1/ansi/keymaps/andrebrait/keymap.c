@@ -329,7 +329,7 @@ bool process_detected_host_os_user(os_variant_t os) {
     os_detection_pending = false;
     if (layer_state_is(new_layer)) {
         /* Set the default layout (no need for EEPROM), let the default layer change callback handle the rest */
-        default_layer_set(new_layer);
+        set_single_default_layer(new_layer);
     } else {
         /* Set the default layout on the EEPROM, let the default layer change callback handle the rest */
         set_single_persistent_default_layer(new_layer);

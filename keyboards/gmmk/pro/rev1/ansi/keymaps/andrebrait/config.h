@@ -21,12 +21,13 @@
 #    define RGB_DISABLE_WHEN_USB_SUSPENDED
 #endif
 
-// A debounce of 8 represents a minimum key press time of just under 1 refresh at 120Hz
-// Slightly higher than the default because we are using sym_eager_pk
+// A debounce of 10 represents a minimum key press time of just under 1 refresh at 90Hz.
+// Still possible to press and release a key within a single frame at up to 90Hz.
+// Using sym_eager_pk and a higher value here reduces double inputs without adding latency.
 #ifdef DEBOUNCE
 #    undef DEBOUNCE
 #endif
-#define DEBOUNCE 8
+#define DEBOUNCE 10
 
 #ifndef OS_DETECTION_KEYBOARD_RESET
 #    define OS_DETECTION_KEYBOARD_RESET
