@@ -313,16 +313,12 @@ bool process_detected_host_os_user(os_variant_t os) {
     // Determine layer to move to
     uint8_t new_layer;
     switch (os) {
-        case OS_LINUX:
-        case OS_WINDOWS:
-            new_layer = WIN_BASE;
-            break;
         case OS_MACOS:
         case OS_IOS:
             new_layer = MAC_BASE;
             break;
         default:
-            new_layer = layer_state_is(MAC_BASE) ? MAC_BASE : WIN_BASE;
+            new_layer = WIN_BASE;
             break;
     }
 
