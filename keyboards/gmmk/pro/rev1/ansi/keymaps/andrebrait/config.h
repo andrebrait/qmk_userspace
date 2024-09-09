@@ -37,6 +37,11 @@
 #    define OS_DETECTION_SINGLE_REPORT
 #endif
 
+// Prevents the keyboard from sleeping upon windows bootup
+#ifndef NO_USB_STARTUP_CHECK
+#    define NO_USB_STARTUP_CHECK
+#endif
+
 // RGB Matrix Animation modes. Explicitly enabled
 // For full list of effects, see:
 // https://docs.qmk.fm/#/feature_rgb_matrix?id=rgb-matrix-effects
