@@ -304,7 +304,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 #ifdef OS_DETECTION_ENABLE
 
 /* Marks that the os detection code was already executed */
-static volatile bool os_detection_pending = true;
+static bool os_detection_pending = true;
 
 /*
 Automatically switch layers when changing OSes
@@ -323,13 +323,7 @@ bool process_detected_host_os_user(os_variant_t os) {
     }
 
     os_detection_pending = false;
-    if (layer_state_is(new_layer)) {
-        /* Set the default layout (no need for EEPROM), let the default layer change callback handle the rest */
-        set_single_default_layer(new_layer);
-    } else {
-        /* Set the default layout on the EEPROM, let the default layer change callback handle the rest */
-        set_single_persistent_default_layer(new_layer);
-    }
+    set_single_default_layer(new_layer);
 
     return true;
 }
@@ -382,8 +376,6 @@ layer_state_t default_layer_state_set_user(layer_state_t state) {
 #    endif
     uint8_t current_layer = get_highest_layer(state);
     if (previous_layer != current_layer) {
-        // For some reason, setting the default layer alone doesn't change it fully
-        layer_move(current_layer);
         switch (current_layer) {
             case WIN_BASE:
                 start_effects(EFFECTS_DURATION, WIN_BASE_COLOR, flashing_effect);
