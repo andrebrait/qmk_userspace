@@ -255,7 +255,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             return false;
         case KC_Q:
             if (user_config.cmd_q_delay_enabled) {
-                if (layer_state_is(MAC_BASE)) {
+                if (layer_state_is(MAC_BASE) || default_layer_state == ((layer_state_t)1 << MAC_BASE)) {
                     uint8_t mods = get_mods();
                     if (mods == MOD_BIT(KC_LCMD) || mods == MOD_BIT(KC_RCMD)) {
                         if (record->event.pressed) {
@@ -375,8 +375,6 @@ layer_state_t default_layer_state_set_user(layer_state_t state) {
 #    endif
     uint8_t current_layer = get_highest_layer(state);
     if (previous_layer != current_layer) {
-        /* For some reason, setting the default layer alone doesn't change it fully */
-        layer_move(current_layer);
         switch (current_layer) {
             case WIN_BASE:
                 start_effects(EFFECTS_DURATION, WIN_BASE_COLOR, flashing_effect);
