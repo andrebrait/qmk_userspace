@@ -15,16 +15,14 @@ MOUSEKEY_ENABLE = no
 # the cost of delay when releasing a key being slightly higher.
 DEBOUNCE_TYPE = asym_eager_defer_pk
 
-# Useful for debugging
-# CONSOLE_ENABLE = yes
-# DEBUG_MATRIX_SCAN_RATE_ENABLE = yes
-# DEBUG_MATRIX_SCAN_RATE = yes
+# Production build: USB console debugging is disabled.
+CONSOLE_ENABLE = no
 
 # Encoder Map support
 ENCODER_MAP_ENABLE = yes
 
-# Enables VIA
-VIA_ENABLE = yes
+# Use the compiled keymap rather than VIA's dynamic keymap.
+VIA_ENABLE = no
 
 # Enables OS detection for layer auto-switch
 OS_DETECTION_ENABLE = yes

@@ -28,14 +28,15 @@
 #endif
 #define DEBOUNCE 5
 
-#ifndef OS_DETECTION_KEYBOARD_RESET
-#    define OS_DETECTION_KEYBOARD_RESET
-#endif
-
-// Prevents late decisions on macOS
+// Report once per keyboard boot to avoid late macOS guesses.
 #ifndef OS_DETECTION_SINGLE_REPORT
 #    define OS_DETECTION_SINGLE_REPORT
 #endif
+
+// Force USB descriptor assembly when switching hosts through a KVM.
+#define OS_DETECTION_KEYBOARD_RESET
+// Limit rapid automatic resets without disabling KVM re-enumeration.
+#define OS_DETECTION_BOOT_LOOP_GUARD
 
 // Prevents the keyboard from sleeping upon windows bootup
 #ifndef NO_USB_STARTUP_CHECK

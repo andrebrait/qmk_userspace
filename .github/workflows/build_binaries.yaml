@@ -10,8 +10,9 @@ jobs:
     name: 'QMK Userspace Build'
     uses: qmk/.github/.github/workflows/qmk_userspace_build.yml@main
     with:
-      qmk_repo: qmk/qmk_firmware
-      qmk_ref: master
+      # Pin the reviewed OS-detection contribution until it lands upstream.
+      qmk_repo: andrebrait/qmk_firmware
+      qmk_ref: 63f08ad65c832fd4adec62f8cef51842dd0037e9
 
   publish:
     name: 'QMK Userspace Publish'

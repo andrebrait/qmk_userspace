@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 enum layers { WIN_BASE = 0, WIN_FN, MAC_BASE, MAC_FN };
 
 enum custom_keycodes {
-    CMDQ_TOG = QK_KB_2 // TECH DEBT: Starts at QK_KB_2 to maintain ordering with VIA definitions. See #19884. Revert to QK_KB_0 when VIA catches up with QMK.
+    CMDQ_TOG = QK_USER_0,
 };
 
 #define KC_TASK LWIN(KC_TAB) // Open Task Manager
@@ -70,9 +70,9 @@ uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [WIN_FN] = LAYOUT(
         EE_CLR,  KC_BRID,  KC_BRIU, KC_TASK, KC_FLXP, RM_VALD, RM_VALU, KC_MPRV, KC_MPLY, KC_MNXT, KC_MUTE, KC_VOLD, KC_VOLU, XXXXXXX,          XXXXXXX,
         XXXXXXX, XXXXXXX,  XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,          KC_PAUS,
-        RM_TOGG, RM_NEXT,  RM_HUEU, RM_SATU, RM_SPDU, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, QK_BOOT,          KC_SCRL,
+        RM_TOGG, RM_NEXT,  RM_HUEU, RM_SATU, RM_SPDU, QK_OS_TOG, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, QK_BOOT,          KC_SCRL,
         DF_MACB, RM_PREV,  RM_HUED, RM_SATD, RM_SPDD, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,          XXXXXXX,          KC_PGUP,
-        XXXXXXX,           XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, NK_TOGG, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,          XXXXXXX, XXXXXXX, KC_PGDN,
+        XXXXXXX,           XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, QK_OS_SKIP, NK_TOGG, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,          XXXXXXX, XXXXXXX, KC_PGDN,
         XXXXXXX, XXXXXXX,  XXXXXXX,                            XXXXXXX,                            XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX
     ),
 
@@ -88,9 +88,9 @@ uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [MAC_FN] = LAYOUT(
         EE_CLR,  KC_BRID,  KC_BRIU, KC_MCTL, KC_LPAD, RM_VALD, RM_VALU, KC_MPRV, KC_MPLY, KC_MNXT, KC_MUTE, KC_VOLD, KC_VOLU, XXXXXXX,          XXXXXXX,
         XXXXXXX, XXXXXXX,  XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,          KC_BRMU,
-        RM_TOGG, RM_NEXT,  RM_HUEU, RM_SATU, RM_SPDU, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, QK_BOOT,          KC_BRMD,
+        RM_TOGG, RM_NEXT,  RM_HUEU, RM_SATU, RM_SPDU, QK_OS_TOG, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, QK_BOOT,          KC_BRMD,
         DF_WINB, RM_PREV,  RM_HUED, RM_SATD, RM_SPDD, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,          XXXXXXX,          KC_PGUP,
-        XXXXXXX,           XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, NK_TOGG, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,          XXXXXXX, XXXXXXX, KC_PGDN,
+        XXXXXXX,           XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, QK_OS_SKIP, NK_TOGG, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,          XXXXXXX, XXXXXXX, KC_PGDN,
         XXXXXXX, XXXXXXX,  CMDQ_TOG,                           XXXXXXX,                            XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX
     )
 };
@@ -170,11 +170,17 @@ static float increasing_effect(fast_timer_t delta_time);
 
 /* Effect variables and functions */
 static fast_timer_t effect_started_time = 0;
-static fast_timer_t effect_max_duration = EFFECTS_DURATION;
+static fast_timer_t effect_max_duration = 0;
 static uint8_t      effect_r = 0x0, effect_g = 0x0, effect_b = 0x0;
 static float (*effect_multiplier)(fast_timer_t) = static_effect;
 static void start_effects(fast_timer_t max_duration, uint8_t r_color, uint8_t g_color, uint8_t b_color, float (*multiplier)(fast_timer_t));
 static void stop_effects(void);
+
+#    ifdef OS_DETECTION_ENABLE
+static bool         os_detection_restart_pending = false;
+static bool         os_detection_toggle_held     = false;
+static fast_timer_t os_detection_restart_started = 0;
+#    endif
 
 /* Delayed keypresses variables with RGB variant */
 static void start_delayed_press_with_effects(fast_timer_t delay, uint16_t keycode, uint8_t r_color, uint8_t g_color, uint8_t b_color);
@@ -205,6 +211,12 @@ void keyboard_post_init_user(void) {
 }
 
 void matrix_scan_user(void) {
+#if defined(OS_DETECTION_ENABLE) && defined(RGB_MATRIX_ENABLE)
+    if (os_detection_restart_pending && !os_detection_toggle_held && timer_elapsed_fast(os_detection_restart_started) >= EFFECTS_DURATION) {
+        os_detection_restart_pending = false;
+        soft_reset_keyboard();
+    }
+#endif
     if (IS_ANY_DELAYED_PRESS_PENDING()) {
         if (timer_elapsed_fast(delayed_press_start_time) > delayed_press_delay) {
             register_code(delayed_press_keycode);
@@ -232,6 +244,21 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         cancel_delayed_press();
     }
     switch (keycode) {
+#if defined(OS_DETECTION_ENABLE) && defined(RGB_MATRIX_ENABLE)
+        case QK_OS_DETECTION_TOGGLE:
+            os_detection_toggle_held = record->event.pressed;
+            if (record->event.pressed) {
+                bool enabled                 = os_detection_toggle();
+                os_detection_restart_pending = enabled;
+                if (enabled) {
+                    start_effects(EFFECTS_DURATION, RGB_GREEN, flashing_effect);
+                    os_detection_restart_started = effect_started_time;
+                } else {
+                    start_effects(EFFECTS_DURATION, RGB_RED, flashing_effect);
+                }
+            }
+            return false;
+#endif
         case QK_DEF_LAYER ... QK_DEF_LAYER_MAX:
             if (record->event.pressed) {
                 /* Set the default layout on the EEPROM, let the default layer change callback handle the rest */
@@ -310,6 +337,11 @@ static bool os_detection_pending = true;
 Automatically switch layers when changing OSes
 */
 bool process_detected_host_os_user(os_variant_t os) {
+#    ifdef RGB_MATRIX_ENABLE
+    if (os_detection_restart_pending) {
+        return false; // Detect the fresh host after the enable animation and intentional restart.
+    }
+#    endif
     // Determine layer to move to
     uint8_t new_layer;
     switch (os) {
@@ -368,8 +400,8 @@ static uint8_t previous_layer = UINT8_MAX;
 
 layer_state_t default_layer_state_set_user(layer_state_t state) {
 #    ifdef OS_DETECTION_ENABLE
-    // OS detection will change the layer later
-    if (os_detection_pending) {
+    // Wait for automatic selection only while detection is enabled.
+    if (os_detection_pending && !keymap_config.os_detection_disabled) {
         return state;
     }
 #    endif
@@ -406,7 +438,7 @@ static void stop_effects(void) {
     effect_g            = 0x0;
     effect_b            = 0x0;
     effect_multiplier   = static_effect;
-    effect_max_duration = EFFECTS_DURATION;
+    effect_max_duration = 0;
     effect_started_time = 0;
 }
 
@@ -433,8 +465,8 @@ static float increasing_effect(fast_timer_t delta_time) {
 //  87, led 07                                                                                                                                                                      88, led 18
 //  91, led 08                                                                                                                                                                      92, led 19
 
-static int WIN_FN_LEDS[] = {0, 2, 3, 6, 8, 9, 12, 14, 15, 18, 20, 21, 23, 25, 26, 28, 34, 38, 39, 44, 50, 56, 61, 66, 72, 75, 82, 86, 93};
-static int MAC_FN_LEDS[] = {0, 2, 3, 6, 8, 9, 12, 14, 15, 17, 18, 20, 21, 23, 25, 26, 28, 34, 38, 39, 44, 50, 56, 61, 66, 72, 75, 82, 86, 93};
+static int WIN_FN_LEDS[] = {0, 2, 3, 6, 8, 9, 12, 14, 15, 18, 20, 21, 23, 25, 26, 28, 30, 32, 34, 38, 39, 44, 50, 56, 61, 66, 72, 75, 82, 86, 93};
+static int MAC_FN_LEDS[] = {0, 2, 3, 6, 8, 9, 12, 14, 15, 17, 18, 20, 21, 23, 25, 26, 28, 30, 32, 34, 38, 39, 44, 50, 56, 61, 66, 72, 75, 82, 86, 93};
 
 static void set_rgb_layer(int *arr, int size, uint8_t r, uint8_t g, uint8_t b) {
     for (int i = 0; i < size; i++) {
@@ -445,7 +477,7 @@ static void set_rgb_layer(int *arr, int size, uint8_t r, uint8_t g, uint8_t b) {
 #    define SET_RGB_LAYER(arr, color) (set_rgb_layer(arr, ARRAY_SIZE(arr), color))
 
 bool rgb_matrix_indicators_user(void) {
-    if (effect_started_time > 0) {
+    if (effect_max_duration > 0) {
         fast_timer_t delta_time = timer_elapsed_fast(effect_started_time);
         if (delta_time <= effect_max_duration) {
             /* Render effect */
