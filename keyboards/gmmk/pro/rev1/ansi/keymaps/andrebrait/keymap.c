@@ -401,7 +401,7 @@ static uint8_t previous_layer = UINT8_MAX;
 layer_state_t default_layer_state_set_user(layer_state_t state) {
 #    ifdef OS_DETECTION_ENABLE
     // Wait for automatic selection only while detection is enabled.
-    if (os_detection_pending && !keymap_config.os_detection_disabled) {
+    if (os_detection_pending && os_detection_is_enabled()) {
         return state;
     }
 #    endif
