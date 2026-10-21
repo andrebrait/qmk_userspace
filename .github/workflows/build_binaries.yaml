@@ -10,9 +10,11 @@ jobs:
     name: 'QMK Userspace Build'
     uses: qmk/.github/.github/workflows/qmk_userspace_build.yml@main
     with:
-      # Pin the reviewed OS-detection contribution until it lands upstream.
+      # Pin the OS-detection contribution (qmk/qmk_firmware#26516 and #26503) until it lands upstream.
       qmk_repo: andrebrait/qmk_firmware
-      qmk_ref: 63f08ad65c832fd4adec62f8cef51842dd0037e9
+      qmk_ref: ab8cc701d08f6547f8dbc1cb8afd6ab982709dfc
+      # Run the keymap behavior checks before building.
+      preparation_command: python3 tests/check_keymap.py --firmware qmk_firmware
 
   publish:
     name: 'QMK Userspace Publish'

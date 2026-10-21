@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check GMMK Pro OS-toggle LED feedback against the real keymap and QMK code."""
+"""Check GMMK Pro keymap behavior (OS-toggle LED feedback, Cmd+Q delay) against the real keymap and QMK code."""
 
 import argparse
 import json
@@ -16,6 +16,7 @@ CHECK = r'''
 #include <stdio.h>
 #include KEYMAP_SOURCE
 #include "nvm_eeconfig.h"
+#include "nvm_os_detection.h"
 #include "eeprom.h"
 
 keymap_config_t keymap_config = {0};
@@ -25,12 +26,13 @@ static unsigned resets;
 static uint8_t pixels[RGB_MATRIX_LED_COUNT][3];
 void advance_time(uint32_t ms);
 void set_time(uint32_t ms);
-void eeconfig_update_keymap(const keymap_config_t *c) { nvm_eeconfig_update_keymap(c); }
+static bool host_q;    // Whether the host currently sees Q held down.
+static uint8_t mods;
 void eeconfig_update_user(uint32_t raw) { nvm_eeconfig_update_user(raw); }
 void soft_reset_keyboard(void) { ++resets; }
-void register_code(uint8_t key) {}
-void unregister_code(uint8_t key) {}
-uint8_t get_mods(void) { return 0; }
+void register_code(uint8_t key) { if (key == KC_Q) host_q = true; }
+void unregister_code(uint8_t key) { if (key == KC_Q) host_q = false; }
+uint8_t get_mods(void) { return mods; }
 bool layer_state_is(uint8_t layer) { return (layer_state & ((layer_state_t)1 << layer)) != 0; }
 void set_single_default_layer(uint8_t layer) {
     default_layer_state = default_layer_state_set_user((layer_state_t)1 << layer);
@@ -61,14 +63,75 @@ static void toggle(void) {
     assert(!process_record_user(QK_OS_TOG, &record));
 }
 static void persisted(bool disabled) {
-    keymap_config_t saved = {0};
-    nvm_eeconfig_read_keymap(&saved);
-    assert(saved.os_detection_disabled == disabled && saved.nkro);
+    assert(nvm_os_detection_read_disabled() == disabled);
+}
+// Like QMK core: a key the keymap does not consume is registered or unregistered on the host.
+static void q(bool pressed) {
+    keyrecord_t record = {0};
+    record.event.pressed = pressed;
+    if (process_record_user(KC_Q, &record)) {
+        if (pressed) register_code(KC_Q); else unregister_code(KC_Q);
+    }
+}
+static void other_key(void) {
+    keyrecord_t record = {0};
+    record.event.pressed = true;
+    process_record_user(KC_W, &record);
+}
+static void cmd_q_checks(void) {
+    set_time(1000); // The delayed press treats a zero start time as idle.
+    set_single_default_layer(MAC_BASE);
+    user_config.cmd_q_delay_enabled = true;
+    const uint8_t cmd = MOD_BIT(KC_LCMD), ctrl = MOD_BIT(KC_LCTL);
+
+    mods = cmd | ctrl;
+    q(true);
+    assert(host_q);
+    mods = cmd; // Ctrl released before Q, as when locking with Ctrl+Cmd+Q.
+    q(false);
+    assert(!host_q);
+    puts("Ctrl+Cmd+Q: releasing Ctrl before Q still releases Q on the host");
+
+    mods = 0;
+    q(true);
+    mods = cmd;
+    q(false);
+    assert(!host_q);
+    puts("Q held before Cmd: the release still reaches the host");
+
+    mods = cmd;
+    q(true);
+    advance_time(CMD_Q_DELAY);
+    matrix_scan_user();
+    assert(!host_q);
+    q(false);
+    advance_time(CMD_Q_DELAY * 2);
+    matrix_scan_user();
+    assert(!host_q);
+    puts("Cmd+Q released before the delay is never sent");
+
+    q(true);
+    advance_time(CMD_Q_DELAY + 1);
+    matrix_scan_user();
+    assert(host_q);
+    mods = 0; // Cmd released before Q.
+    q(false);
+    assert(!host_q);
+    puts("Cmd+Q held past the delay is sent once and released with Q");
+
+    mods = cmd;
+    q(true);
+    other_key();
+    advance_time(CMD_Q_DELAY * 2);
+    matrix_scan_user();
+    assert(!host_q);
+    q(false);
+    assert(!host_q);
+    puts("Another key cancels a pending Cmd+Q");
+    mods = 0;
 }
 int main(void) {
     timer_init(); // Feedback must work even at tick zero.
-    keymap_config.nkro = true;
-    eeconfig_update_keymap(&keymap_config);
     toggle();
     persisted(true);
     frame(RGB_RED);
@@ -141,6 +204,8 @@ int main(void) {
     assert(resets == 3);
     persisted(false);
     puts("Reboot timing remains correct across timer rollover");
+
+    cmd_q_checks();
 }
 '''
 
@@ -159,8 +224,8 @@ def main():
                 'quantum/rgb_matrix', 'quantum/rgb_matrix/animations', 'lib/printf/src/printf',
                 'drivers', 'drivers/battery']
     sources = ['quantum/os_detection.c', 'quantum/nvm/eeprom/nvm_eeconfig.c',
-               'quantum/bitwise.c', 'platforms/timer.c', 'platforms/test/timer.c',
-               'platforms/test/eeprom.c']
+               'quantum/nvm/eeprom/nvm_os_detection.c', 'quantum/bitwise.c', 'platforms/timer.c',
+               'platforms/test/timer.c', 'platforms/test/eeprom.c']
     with tempfile.TemporaryDirectory(prefix='qmk-led-feedback-') as temporary:
         temporary = Path(temporary)
         header = temporary / 'keyboard.h'
