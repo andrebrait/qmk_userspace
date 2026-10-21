@@ -281,17 +281,16 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             }
             return false;
         case KC_Q:
-            if (user_config.cmd_q_delay_enabled) {
+            // Only intercept presses; releases of intercepted presses are handled above, and any other Q release must reach the host.
+            if (record->event.pressed && user_config.cmd_q_delay_enabled) {
                 if (layer_state_is(MAC_BASE) || default_layer_state == ((layer_state_t)1 << MAC_BASE)) {
                     uint8_t mods = get_mods();
                     if (mods == MOD_BIT(KC_LCMD) || mods == MOD_BIT(KC_RCMD)) {
-                        if (record->event.pressed) {
 #ifdef RGB_MATRIX_ENABLE
-                            start_delayed_press_with_effects(CMD_Q_DELAY, KC_Q, RGB_ORANGE);
+                        start_delayed_press_with_effects(CMD_Q_DELAY, KC_Q, RGB_ORANGE);
 #else
-                            start_delayed_press(CMD_Q_DELAY, KC_Q);
+                        start_delayed_press(CMD_Q_DELAY, KC_Q);
 #endif
-                        }
                         return false;
                     }
                 }
